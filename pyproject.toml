@@ -1,0 +1,38 @@
+[project]
+name = "astrbot-plugin-qfxaile"
+version = "0.1.0"
+description = "Qfxaile AstrBot 综合插件"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx",
+  "requests",
+  "wordcloud",
+]
+
+[dependency-groups]
+dev = [
+  "astrbot>=4.26.3,<5",
+  "pytest>=8.4.1,<9",
+  "pytest-asyncio>=1.1.0,<2",
+  "ruff==0.15.22",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "W", "E", "ASYNC", "C4", "Q", "I", "UP"]
+ignore = ["E501", "ASYNC230", "ASYNC240"]
+
+[tool.ruff.format]
+line-ending = "lf"

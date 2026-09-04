@@ -1,0 +1,169 @@
+{
+  "agree": {
+    "description": "申请审批功能",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用申请审批",
+        "type": "bool",
+        "default": true
+      },
+      "notify_group_id": {
+        "description": "申请提醒群号",
+        "type": "string",
+        "default": ""
+      },
+      "auto_approve_admin_request": {
+        "description": "管理员申请自动同意",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "daily_image": {
+    "description": "定时发图功能",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用定时发图",
+        "type": "bool",
+        "default": true
+      },
+      "schedule_time": {
+        "description": "定时发图时间（HH:MM）",
+        "type": "string",
+        "default": "08:00"
+      },
+      "image_path": {
+        "description": "定时发图图片路径",
+        "type": "string",
+        "default": "setu.jpg"
+      },
+      "scheduled_groups": {
+        "description": "定时发图群号",
+        "type": "list",
+        "default": []
+      },
+      "keyword": {
+        "description": "关键词随机发图功能",
+        "type": "object",
+        "items": {
+          "enabled": {
+            "description": "启用关键词随机发图",
+            "type": "bool",
+            "default": true
+          },
+          "keywords": {
+            "description": "随机发图关键词",
+            "type": "list",
+            "default": [
+              "色图",
+              "涩图",
+              "色色",
+              "涩涩",
+              "好色",
+              "好涩"
+            ]
+          },
+          "probability": {
+            "description": "关键词发图概率",
+            "type": "float",
+            "default": 0.15
+          }
+        }
+      }
+    }
+  },
+  "nbnhhsh": {
+    "description": "缩写查询功能",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用缩写查询",
+        "type": "bool",
+        "default": true
+      },
+      "api_url": {
+        "description": "缩写查询 API 地址",
+        "type": "string",
+        "default": "https://lab.magiconch.com/api/nbnhhsh/guess"
+      },
+      "timeout_seconds": {
+        "description": "缩写查询超时",
+        "type": "int",
+        "default": 30
+      }
+    }
+  },
+  "recall": {
+    "description": "消息撤回功能",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用消息撤回",
+        "type": "bool",
+        "default": true
+      },
+      "delete_command_message": {
+        "description": "同时撤回命令消息",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "wordcloud": {
+    "description": "词云功能",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用词云命令",
+        "type": "bool",
+        "default": true
+      },
+      "scheduled_groups": {
+        "description": "词云统计群号",
+        "type": "list",
+        "default": []
+      },
+      "font_path": {
+        "description": "词云字体路径",
+        "type": "string",
+        "default": "data/fonts/SourceHanSansSC-Regular.otf"
+      },
+      "font_download_url": {
+        "description": "词云字体下载地址",
+        "type": "string",
+        "default": "https://mirrors.tuna.tsinghua.edu.cn/adobe-fonts/source-han-sans/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf"
+      },
+      "exclude_bot_self": {
+        "description": "词云排除机器人",
+        "type": "bool",
+        "default": true
+      },
+      "ignore_texts": {
+        "description": "词云忽略文本",
+        "type": "list",
+        "default": [
+          "/wordcloud",
+          "/词云",
+          "/词云生成",
+          "/添加词云群组",
+          "/删除词云群组",
+          "赞我",
+          "复制打开抖音"
+        ]
+      },
+      "schedule": {
+        "description": "自动词云功能",
+        "type": "object",
+        "items": {
+          "time": {
+            "description": "自动词云时间（HH:MM）",
+            "type": "string",
+            "default": "22:00"
+          }
+        }
+      }
+    }
+  }
+}
