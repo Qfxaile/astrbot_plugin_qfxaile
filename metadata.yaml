@@ -1,0 +1,5 @@
+name: astrbot_plugin_qfxaile
+desc: Qfxaile 综合插件，整合申请审批、定时发图、缩写查询、消息撤回与群词云功能。
+version: v0.1.0
+author: Qfxaile
+repo: ""
