@@ -39,6 +39,19 @@ class WordcloudService:
             and isinstance(segment.get("data"), Mapping)
         ).strip()
 
+    @staticmethod
+    def remove_ignored_text(content: str, ignore_texts: set[str]) -> str:
+        """从消息中移除配置的忽略短语。"""
+        phrases = sorted(
+            (phrase.strip() for phrase in ignore_texts if phrase.strip()),
+            key=len,
+            reverse=True,
+        )
+        if not phrases:
+            return content.strip()
+        pattern = "|".join(re.escape(phrase) for phrase in phrases)
+        return re.sub(pattern, "", content, flags=re.IGNORECASE).strip()
+
     async def fetch_messages(
         self, group_id: str, start_time: int, end_time: int
     ) -> list[dict]:
@@ -128,8 +141,7 @@ class WordcloudService:
         display_names: dict[str, str] = {}
         for raw_message in messages:
             content = self.extract_text(raw_message)
-            if content in ignore_texts:
-                continue
+            content = self.remove_ignored_text(content, ignore_texts)
             content = re.sub(r"(http[s]?://\S+|www\.\S+)", "", content).strip()
             if not content or content.isdigit():
                 continue
@@ -157,6 +169,7 @@ class WordcloudService:
             background_color="white",
             font_path=str(font_path),
             collocations=False,
+            stopwords=ignore_texts,
         )
         cloud.generate_from_text("\n".join(texts))
         cloud.to_file(str(image_path))

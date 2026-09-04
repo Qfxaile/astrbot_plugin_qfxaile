@@ -64,3 +64,12 @@ def test_extract_text_supports_string_and_segment_messages():
         )
         == "a"
     )
+
+
+def test_remove_ignored_text_filters_phrases_inside_messages():
+    assert (
+        WordcloudService.remove_ignored_text(
+            "视频作者：小明，简介在这里", {"作者", "简介"}
+        )
+        == "视频：小明，在这里"
+    )
