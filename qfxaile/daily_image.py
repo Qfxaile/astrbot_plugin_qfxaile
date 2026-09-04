@@ -24,32 +24,24 @@ class DailyImageService:
     def image_path(self) -> Path:
         return self.settings.image_path()
 
-    def schedule_hour(self) -> int:
-        return self.settings.bounded_int("daily_image_schedule_hour", 8, 0, 23)
+    def schedule_time(self) -> tuple[int, int]:
+        return self.settings.clock_time("daily_image.schedule_time", 8, 0)
 
-    def schedule_minute(self) -> int:
-        return self.settings.bounded_int("daily_image_schedule_minute", 0, 0, 59)
-
-    def sessions(self) -> list[str]:
-        groups = self.settings.string_list("daily_image_scheduled_groups")
-        if groups:
-            platform_id = str(
-                self.settings.value("daily_image_platform_id", "")
-            ).strip()
-            if not platform_id:
-                return []
-            return [f"{platform_id}:GroupMessage:{group_id}" for group_id in groups]
-        return self.settings.string_list("daily_image_scheduled_sessions")
+    def sessions(self, platform_id: str | None) -> list[str]:
+        groups = self.settings.string_list("daily_image.scheduled_groups")
+        if not groups or not platform_id:
+            return []
+        return [f"{platform_id}:GroupMessage:{group_id}" for group_id in groups]
 
     def keyword_matches(self, text: str) -> bool:
-        keywords = self.settings.string_list("daily_image_keywords")
+        keywords = self.settings.string_list("daily_image.keyword.keywords")
         return bool(keywords) and any(keyword in text for keyword in keywords)
 
     def should_send_keyword(self, text: str, random_value: float) -> bool:
         if not self.keyword_matches(text):
             return False
         probability = self.settings.bounded_float(
-            "daily_image_keyword_probability", 0.15, 0.0, 1.0
+            "daily_image.keyword.probability", 0.15, 0.0, 1.0
         )
         return random_value <= probability
 
@@ -62,7 +54,7 @@ class DailyImageService:
         if not image_path.exists():
             logger.warning(f"定时发图图片不存在: {image_path}")
             return
-        for session in sessions if sessions is not None else self.sessions():
+        for session in sessions or []:
             try:
                 result = self.sender(session, message_factory(image_path))
                 if inspect.isawaitable(result):

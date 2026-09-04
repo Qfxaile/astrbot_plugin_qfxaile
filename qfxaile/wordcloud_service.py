@@ -42,20 +42,15 @@ class WordcloudService:
     async def fetch_messages(
         self, group_id: str, start_time: int, end_time: int
     ) -> list[dict]:
-        max_count = self.settings.bounded_int(
-            "wordcloud_history_fetch_count", 1000, 1, 100000
-        )
-        chunk_size = self.settings.bounded_int(
-            "wordcloud_history_chunk_size", 100, 1, 100
-        )
-        exclude_bot_self = bool(self.settings.value("wordcloud_exclude_bot_self", True))
+        chunk_size = 100
+        exclude_bot_self = bool(self.settings.value("wordcloud.exclude_bot_self", True))
         bot_self_id = str(getattr(getattr(self.client, "bot", None), "self_id", ""))
         all_messages: list[dict] = []
         seen_ids: set[str] = set()
         seen_pages: set[tuple[str, ...]] = set()
         current_anchor: Any = None
-        while len(all_messages) < max_count:
-            fetch_count = min(chunk_size, max_count - len(all_messages))
+        while True:
+            fetch_count = chunk_size
             params: dict[str, Any] = {
                 "group_id": int(group_id),
                 "count": fetch_count,
@@ -127,7 +122,7 @@ class WordcloudService:
         )
         end_time = int(current_date.replace(hour=22, minute=0).timestamp())
         messages = await self.fetch_messages(group_id, start_time, end_time)
-        ignore_texts = set(self.settings.string_list("wordcloud_ignore_texts"))
+        ignore_texts = set(self.settings.string_list("wordcloud.ignore_texts"))
         texts: list[str] = []
         stats: dict[str, int] = {}
         display_names: dict[str, str] = {}
@@ -188,10 +183,10 @@ class WordcloudService:
         font_path = self.settings.font_path()
         if font_path.exists():
             return font_path
-        font_url = str(self.settings.value("wordcloud_font_download_url", "")).strip()
+        font_url = str(self.settings.value("wordcloud.font_download_url", "")).strip()
         if not font_url:
             raise RuntimeError(
-                f"字体不存在且未配置 wordcloud_font_download_url: {font_path}"
+                f"字体不存在且未配置 wordcloud.font_download_url: {font_path}"
             )
         font_path.parent.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient(timeout=20) as client:

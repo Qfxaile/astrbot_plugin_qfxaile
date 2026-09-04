@@ -34,7 +34,7 @@ class RecallService:
     ) -> None:
         await self.client.call("delete_msg", message_id=int(reply_id))
         if (
-            self.settings.value("recall_delete_command_message", True)
+            self.settings.value("recall.delete_command_message", True)
             and command_message_id
         ):
             await self.client.call("delete_msg", message_id=int(command_message_id))

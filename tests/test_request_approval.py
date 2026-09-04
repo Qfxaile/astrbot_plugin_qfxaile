@@ -36,14 +36,10 @@ async def test_request_service_notifies_and_decides():
         client,
         store,
         PluginSettings(
-            {
-                "agree_notify_group_id": "123",
-                "agree_admin_user_ids": ["7"],
-                "agree_auto_approve_admin_request": False,
-            }
+            {"agree": {"notify_group_id": "123", "auto_approve_admin_request": False}}
         ),
+        admin_ids=["7"],
     )
-
     await service.handle_request(
         {"post_type": "request", "request_type": "friend", "user_id": 7, "flag": "f"}
     )

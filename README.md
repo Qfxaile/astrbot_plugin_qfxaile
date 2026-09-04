@@ -1,6 +1,6 @@
 # astrbot_plugin_qfxaile
 
-Qfxaile 综合插件，整合以下功能：
+Qfxaile 综合插件，提供以下功能：
 
 - OneBot 好友/加群申请转发与“同意”“拒绝”审批。
 - 定时发图，以及群聊关键词随机发图。
@@ -9,7 +9,6 @@ Qfxaile 综合插件，整合以下功能：
 - `/wordcloud`、`/词云`、`/词云生成` 生成群词云。
 - `/添加词云群组`、`/删除词云群组` 管理自动词云群组。
 
-配置项已按功能前缀区分，避免原插件之间的同名配置冲突。原五个插件的配置值应迁移到对应的 `agree_*`、`daily_image_*`、`nbnhhsh_*`、`recall_*` 和 `wordcloud_*` 配置项。
 
 依赖：`httpx`、`wordcloud`。
 

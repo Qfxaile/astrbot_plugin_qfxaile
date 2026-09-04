@@ -37,18 +37,27 @@ class QfxailePlugin(Star):
         )
         self.daily_image = DailyImageService(self.settings, self._send_message)
         self.abbreviation = AbbreviationService(
-            str(self.settings.value("nbnhhsh_api_url", "")),
-            self.settings.bounded_int("nbnhhsh_timeout_seconds", 30, 1, 300),
+            str(self.settings.value("nbnhhsh.api_url", "")),
+            self.settings.bounded_int("nbnhhsh.timeout_seconds", 30, 1, 300),
         )
 
     async def _send_message(self, session: str, message: Any) -> None:
         await self.context.send_message(session, message)
 
-    def _admins(self, key: str) -> set[str]:
-        return self.settings.admins(key)
+    def _astrbot_admin_ids(self) -> set[str]:
+        config = getattr(self.context, "astrbot_config", {})
+        if not isinstance(config, Mapping):
+            return set()
+        value = config.get("admins_id", config.get("admin_ids", []))
+        if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set)):
+            return set()
+        return {str(item).strip() for item in value if str(item).strip()}
 
-    def _is_admin(self, event: AstrMessageEvent, key: str) -> bool:
-        return self.settings.is_admin(key, event.get_sender_id())
+    def _is_admin(self, event: AstrMessageEvent) -> bool:
+        checker = getattr(event, "is_admin", None)
+        if callable(checker):
+            return bool(checker())
+        return str(event.get_sender_id()) in self._astrbot_admin_ids()
 
     @staticmethod
     def _raw_message(raw: Any) -> list[Any]:
@@ -87,11 +96,6 @@ class QfxailePlugin(Star):
         return OneBotClient(bot)
 
     def _get_onebot_platform(self) -> Any:
-        platform_id = str(self.settings.value("wordcloud_platform_id", "")).strip()
-        if platform_id:
-            platform = self.context.get_platform_inst(platform_id)
-            if platform:
-                return platform
         for item in getattr(self.context.platform_manager, "platform_insts", []):
             if item.meta().name == "aiocqhttp":
                 return item
@@ -99,9 +103,10 @@ class QfxailePlugin(Star):
 
     def _daily_seconds_until_next_run(self) -> float:
         now = datetime.now()
+        schedule_hour, schedule_minute = self.daily_image.schedule_time()
         target = now.replace(
-            hour=self.daily_image.schedule_hour(),
-            minute=self.daily_image.schedule_minute(),
+            hour=schedule_hour,
+            minute=schedule_minute,
             second=0,
             microsecond=0,
         )
@@ -112,39 +117,42 @@ class QfxailePlugin(Star):
     async def _daily_scheduler_loop(self) -> None:
         while True:
             await asyncio.sleep(self._daily_seconds_until_next_run())
+            if not self.settings.value("daily_image.enabled", True):
+                continue
+            platform = self._get_onebot_platform()
+            platform_id = platform.meta().id if platform else None
             await self.daily_image.send_scheduled(
-                None, lambda path: MessageChain([Image.fromFileSystem(str(path))])
+                self.daily_image.sessions(platform_id),
+                lambda path: MessageChain([Image.fromFileSystem(str(path))]),
             )
 
     async def _wordcloud_scheduler_loop(self) -> None:
         while True:
+            if not self.settings.value("wordcloud.enabled", True):
+                await asyncio.sleep(60)
+                continue
+            schedule_hour, schedule_minute = self.settings.clock_time(
+                "wordcloud.schedule.time", 22, 0
+            )
             now = datetime.now()
             target = now.replace(
-                hour=self.settings.bounded_int("wordcloud_schedule_hour", 22, 0, 23),
-                minute=self.settings.bounded_int("wordcloud_schedule_minute", 0, 0, 59),
+                hour=schedule_hour,
+                minute=schedule_minute,
                 second=0,
                 microsecond=0,
             )
             if target <= now:
                 target += timedelta(days=1)
             await asyncio.sleep(max((target - now).total_seconds(), 1.0))
-            groups = self.settings.string_list("wordcloud_scheduled_groups")
+            groups = self.settings.string_list("wordcloud.scheduled_groups")
             platform = self._get_onebot_platform()
             if groups and not platform:
                 logger.warning("未找到 OneBot 平台实例，无法自动发送词云。")
                 continue
-            if groups:
-                platform_id = platform.meta().id
-                sessions = [
-                    f"{platform_id}:GroupMessage:{group_id}" for group_id in groups
-                ]
-            else:
-                sessions = self.settings.string_list("wordcloud_scheduled_sessions")
-                groups = [
-                    parts[2]
-                    for session in sessions
-                    if len(parts := session.split(":", 2)) == 3
-                ]
+            if not groups:
+                continue
+            platform_id = platform.meta().id
+            sessions = [f"{platform_id}:GroupMessage:{group_id}" for group_id in groups]
             for index, group_id in enumerate(groups):
                 if index >= len(sessions) or not sessions[index]:
                     continue
@@ -163,16 +171,24 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_request_event(self, event: AstrMessageEvent):
-        service = RequestApprovalService(self._client(event), self.store, self.settings)
+        if not self.settings.value("agree.enabled", True):
+            return
+        service = RequestApprovalService(
+            self._client(event), self.store, self.settings, self._astrbot_admin_ids()
+        )
         await service.handle_request(self._raw(event))
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_decision(self, event: AstrMessageEvent):
+        if not self.settings.value("agree.enabled", True):
+            return
         decision = event.message_str.strip()
         if decision not in {"同意", "拒绝"}:
             return
         reply_id = self._get_reply_id(event)
-        service = RequestApprovalService(self._client(event), self.store, self.settings)
+        service = RequestApprovalService(
+            self._client(event), self.store, self.settings, self._astrbot_admin_ids()
+        )
         try:
             result = await service.decide(
                 reply_id or "", decision, event.get_sender_id()
@@ -187,6 +203,8 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_keyword_image(self, event: AstrMessageEvent):
+        if not self.settings.value("daily_image.keyword.enabled", True):
+            return
         if not self.daily_image.should_send_keyword(event.message_str, random.random()):
             return
         image_path = self.daily_image.image_path()
@@ -203,6 +221,8 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_nbnhhsh(self, event: AstrMessageEvent):
+        if not self.settings.value("nbnhhsh.enabled", True):
+            return
         text = event.message_str.strip()
         if not text.startswith(("?", "？")):
             return
@@ -214,9 +234,11 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_recall(self, event: AstrMessageEvent):
+        if not self.settings.value("recall.enabled", True):
+            return
         if event.message_str.strip() != "撤回":
             return
-        if not self._is_admin(event, "recall_admin_user_ids"):
+        if not self._is_admin(event):
             yield event.plain_result("你没有权限执行撤回。")
             return
         reply_id = self._get_reply_id(event)
@@ -233,6 +255,8 @@ class QfxailePlugin(Star):
 
     @filter.command("wordcloud", alias={"词云", "词云生成"})
     async def wordcloud_command(self, event: AstrMessageEvent):
+        if not self.settings.value("wordcloud.enabled", True):
+            return
         group_id = str(event.get_group_id() or "")
         if not group_id:
             yield event.plain_result("词云仅支持群聊。")
@@ -251,14 +275,16 @@ class QfxailePlugin(Star):
 
     @filter.command("添加词云群组")
     async def add_wordcloud_group(self, event: AstrMessageEvent):
-        if not self._is_admin(event, "wordcloud_admin_user_ids"):
+        if not self.settings.value("wordcloud.enabled", True):
+            return
+        if not self._is_admin(event):
             yield event.plain_result("你没有权限管理词云群组。")
             return
         group_id = str(event.get_group_id() or "")
-        groups = self.settings.string_list("wordcloud_scheduled_groups")
+        groups = self.settings.string_list("wordcloud.scheduled_groups")
         if group_id not in groups:
             groups.append(group_id)
-            self.config["wordcloud_scheduled_groups"] = groups
+            self.settings.set_value("wordcloud.scheduled_groups", groups)
             self.config.save_config()
             yield event.plain_result(f"群组 {group_id} 已添加到词云自动发送列表。")
         else:
@@ -266,14 +292,16 @@ class QfxailePlugin(Star):
 
     @filter.command("删除词云群组")
     async def remove_wordcloud_group(self, event: AstrMessageEvent):
-        if not self._is_admin(event, "wordcloud_admin_user_ids"):
+        if not self.settings.value("wordcloud.enabled", True):
+            return
+        if not self._is_admin(event):
             yield event.plain_result("你没有权限管理词云群组。")
             return
         group_id = str(event.get_group_id() or "")
-        groups = self.settings.string_list("wordcloud_scheduled_groups")
+        groups = self.settings.string_list("wordcloud.scheduled_groups")
         if group_id in groups:
             groups.remove(group_id)
-            self.config["wordcloud_scheduled_groups"] = groups
+            self.settings.set_value("wordcloud.scheduled_groups", groups)
             self.config.save_config()
             yield event.plain_result(f"群组 {group_id} 已从词云自动发送列表移除。")
         else:

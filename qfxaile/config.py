@@ -26,7 +26,21 @@ class PluginSettings:
         self.base_dir = base_dir
 
     def value(self, key: str, default: Any = None) -> Any:
-        return self.config.get(key, default)
+        current: Any = self.config
+        for part in key.split("."):
+            if not isinstance(current, Mapping) or part not in current:
+                return default
+            current = current[part]
+        return current
+
+    def set_value(self, key: str, value: Any) -> None:
+        parts = key.split(".")
+        current: Any = self.config
+        for part in parts[:-1]:
+            if part not in current or not isinstance(current[part], Mapping):
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
 
     def admins(self, key: str) -> set[str]:
         value = self.value(key, [])
@@ -49,6 +63,17 @@ class PluginSettings:
         except (TypeError, ValueError):
             value = default
         return max(minimum, min(value, maximum))
+
+    def clock_time(
+        self, key: str, default_hour: int, default_minute: int
+    ) -> tuple[int, int]:
+        value = str(self.value(key, f"{default_hour:02d}:{default_minute:02d}")).strip()
+        try:
+            hour_text, minute_text = value.split(":", 1)
+            hour, minute = int(hour_text), int(minute_text)
+        except (TypeError, ValueError):
+            return default_hour, default_minute
+        return max(0, min(hour, 23)), max(0, min(minute, 59))
 
     def bounded_float(
         self, key: str, default: float, minimum: float, maximum: float
@@ -73,9 +98,9 @@ class PluginSettings:
         )
 
     def image_path(self) -> Path:
-        return self._resolve_path("daily_image_image_path", "setu.jpg")
+        return self._resolve_path("daily_image.image_path", "setu.jpg")
 
     def font_path(self) -> Path:
         return self._resolve_path(
-            "wordcloud_font_path", "data/fonts/SourceHanSansSC-Regular.otf"
+            "wordcloud.font_path", "data/fonts/SourceHanSansSC-Regular.otf"
         )
