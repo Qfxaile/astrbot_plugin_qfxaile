@@ -263,7 +263,7 @@ class QfxailePlugin(Star):
             return
         service = WordcloudService(self._client(event), self.settings)
         yield event.chain_result(
-            MessageChain(await service.build(group_id, self._get_current_date()))
+            await service.build(group_id, self._get_current_date())
         )
 
     @staticmethod
