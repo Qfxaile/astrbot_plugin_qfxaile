@@ -213,11 +213,17 @@ class QfxailePlugin(Star):
             return
         yield event.image_result(str(image_path))
 
-    @filter.on_astrbot_loaded()
-    async def on_loaded(self):
+    async def initialize(self):
+        self._start_background_tasks()
+
+    def _start_background_tasks(self):
         self.registry.start("daily_image", self._daily_scheduler_loop)
         self.registry.start("wordcloud", self._wordcloud_scheduler_loop)
         logger.info("Qfxaile 后台任务已启动。")
+
+    @filter.on_astrbot_loaded()
+    async def on_loaded(self):
+        self._start_background_tasks()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_nbnhhsh(self, event: AstrMessageEvent):

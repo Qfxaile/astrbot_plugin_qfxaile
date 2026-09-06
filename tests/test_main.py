@@ -1,10 +1,24 @@
+import asyncio
 import importlib
 import sys
+import types
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+plugin_root = Path(__file__).resolve().parents[1]
+astrbot_root = plugin_root.parents[1]
+sys.path.insert(0, str(astrbot_root))
+data_root = astrbot_root / "data"
+for package_name, package_path in (
+    ("data", data_root),
+    ("data.plugins", data_root / "plugins"),
+    ("data.plugins.astrbot_plugin_qfxaile", plugin_root),
+):
+    package = types.ModuleType(package_name)
+    package.__path__ = [str(package_path)]
+    sys.modules[package_name] = package
+
 main = importlib.import_module("data.plugins.astrbot_plugin_qfxaile.main")
 
 
@@ -33,6 +47,30 @@ def test_plugin_constructor_does_not_create_background_tasks(monkeypatch):
 
     assert plugin.registry.tasks == {}
     assert created == []
+
+
+@pytest.mark.asyncio
+async def test_plugin_lifecycle_starts_and_stops_background_tasks():
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.registry = main.TaskRegistry()
+
+    started = asyncio.Event()
+
+    async def wait_forever():
+        started.set()
+        await asyncio.Event().wait()
+
+    plugin._daily_scheduler_loop = wait_forever
+    plugin._wordcloud_scheduler_loop = wait_forever
+
+    await plugin.initialize()
+    await started.wait()
+
+    assert set(plugin.registry.tasks) == {"daily_image", "wordcloud"}
+
+    await plugin.terminate()
+
+    assert plugin.registry.tasks == {}
 
 
 @pytest.mark.asyncio
