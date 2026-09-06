@@ -33,6 +33,19 @@ def test_raw_message_parser_rejects_invalid_shapes():
     assert main.QfxailePlugin._raw_message(object()) == []
 
 
+def test_admin_ids_read_astrbot_context_config():
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.context = type("Context", (), {"_config": {"admins_id": [7, " 8 ", ""]}})()
+
+    assert plugin._astrbot_admin_ids() == {"7", "8"}
+
+
+def test_command_text_ignores_reply_mention_prefix():
+    event = type("Event", (), {"message_str": " @Nickname(12345) 撤回 "})()
+
+    assert main.QfxailePlugin._command_text(event) == "撤回"
+
+
 class FakeRecallClient:
     def __init__(self, original_sender_id):
         self.original_sender_id = original_sender_id
@@ -51,6 +64,23 @@ class FakeSettings:
 
     def value(self, key, default):
         return self.values.get(key, default)
+
+
+class FakeApprovalEvent:
+    def __init__(self):
+        self.message_str = " @Nickname(12345) 同意 "
+
+    def get_group_id(self):
+        return "123"
+
+    def get_sender_id(self):
+        return "88"
+
+    def is_admin(self):
+        return True
+
+    def plain_result(self, text):
+        return text
 
 
 class FakeRecallEvent:
@@ -143,6 +173,52 @@ async def test_recall_non_admin_cannot_delete_other_message(monkeypatch):
     assert results == ["撤回消息失败: 只能撤回自己发送的消息。"]
     assert event.stopped is True
     assert client.calls == [("get_msg", {"message_id": 42})]
+
+
+@pytest.mark.asyncio
+async def test_quoted_decision_accepts_mention_and_event_admin(monkeypatch):
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.settings = FakeSettings({"agree.enabled": True})
+    plugin.context = type("Context", (), {"_config": {"admins_id": []}})()
+    plugin.store = type("Store", (), {"data": {"42": {"type": "friend"}}})()
+
+    def load(store_self):
+        return dict(store_self.data)
+
+    def save(store_self, data):
+        store_self.data = dict(data)
+
+    plugin.store.load = lambda: load(plugin.store)
+    plugin.store.save = lambda data: save(plugin.store, data)
+    plugin._client = lambda event: object()
+    event = FakeApprovalEvent()
+    monkeypatch.setattr(
+        main.QfxailePlugin,
+        "_get_reply_id",
+        lambda self, event: "42",
+    )
+
+    class FakeService:
+        def __init__(self, client, store, settings, admin_ids):
+            self.store = store
+
+        def can_decide_in_group(self, group_id):
+            return group_id == "123"
+
+        async def decide(self, reply_id, decision, sender_id, *, allow):
+            assert reply_id == "42"
+            assert decision == "同意"
+            assert sender_id == "88"
+            assert allow is True
+            self.store.data.pop(reply_id)
+            return "approved"
+
+    monkeypatch.setattr(main, "RequestApprovalService", FakeService)
+
+    results = [result async for result in plugin.handle_decision(event)]
+
+    assert results == ["approved"]
+    assert plugin.store.data == {}
 
 
 def test_plugin_constructor_does_not_create_background_tasks(monkeypatch):

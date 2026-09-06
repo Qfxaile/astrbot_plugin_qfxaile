@@ -49,6 +49,23 @@ async def test_request_service_notifies_and_decides():
     assert store.data == {}
 
 
+@pytest.mark.asyncio
+async def test_event_admin_role_can_authorize_decision():
+    client, store = Client(), Store()
+    service = RequestApprovalService(
+        client,
+        store,
+        PluginSettings({}),
+        admin_ids=[],
+    )
+    store.data["99"] = {"type": "friend", "flag": "f"}
+
+    result = await service.decide("99", "同意", "7", allow=True)
+
+    assert result == "已同意请求 ID: 99"
+    assert client.calls[0][0] == "set_friend_add_request"
+
+
 def test_decisions_are_limited_to_notify_group():
     service = RequestApprovalService(
         Client(),

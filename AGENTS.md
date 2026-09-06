@@ -10,7 +10,7 @@
 
 ## 目录结构
 
-- `main.py`：AstrBot 事件入口、功能开关、权限判断、LLM 拦截和后台调度。
+- `main.py`：AstrBot 事件入口、功能开关、权限判断、指令文本解析、LLM 拦截和后台调度。
 - `qfxaile/`：业务服务模块。
 - `_conf_schema.json`：嵌套功能配置 schema。
 - `tests/`：pytest 测试。

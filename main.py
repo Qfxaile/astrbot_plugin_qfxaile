@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,6 +27,8 @@ from .qfxaile.wordcloud_service import WordcloudService
 class QfxailePlugin(Star):
     """AstrBot event adapter for Qfxaile services."""
 
+    _AT_MENTION_PREFIX = re.compile(r"^\s*@[^@\r\n]+?\(\d+\)\s*")
+
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.context = context
@@ -45,7 +48,9 @@ class QfxailePlugin(Star):
         await self.context.send_message(session, message)
 
     def _astrbot_admin_ids(self) -> set[str]:
-        config = getattr(self.context, "astrbot_config", {})
+        config = getattr(self.context, "astrbot_config", None)
+        if not isinstance(config, Mapping):
+            config = getattr(self.context, "_config", {})
         if not isinstance(config, Mapping):
             return set()
         value = config.get("admins_id", config.get("admin_ids", []))
@@ -58,6 +63,13 @@ class QfxailePlugin(Star):
         if callable(checker):
             return bool(checker())
         return str(event.get_sender_id()) in self._astrbot_admin_ids()
+
+    @classmethod
+    def _command_text(cls, event: AstrMessageEvent) -> str:
+        text = event.message_str.strip()
+        while match := cls._AT_MENTION_PREFIX.match(text):
+            text = text[match.end() :].strip()
+        return text
 
     @staticmethod
     def _raw_message(raw: Any) -> list[Any]:
@@ -182,7 +194,7 @@ class QfxailePlugin(Star):
     async def handle_decision(self, event: AstrMessageEvent):
         if not self.settings.value("agree.enabled", True):
             return
-        decision = event.message_str.strip()
+        decision = self._command_text(event)
         if decision not in {"同意", "拒绝"}:
             return
         reply_id = self._get_reply_id(event)
@@ -193,7 +205,10 @@ class QfxailePlugin(Star):
             return
         try:
             result = await service.decide(
-                reply_id or "", decision, event.get_sender_id()
+                reply_id or "",
+                decision,
+                event.get_sender_id(),
+                allow=self._is_admin(event),
             )
         except (PermissionError, LookupError, ValueError) as exc:
             yield event.plain_result(str(exc))
@@ -242,7 +257,7 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_recall(self, event: AstrMessageEvent):
-        if event.message_str.strip() != "撤回":
+        if self._command_text(event) != "撤回":
             return
         reply_id = self._get_reply_id(event)
         if not reply_id:

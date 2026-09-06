@@ -72,10 +72,17 @@ class RequestApprovalService:
             records[message_id] = request_info
             self.store.save(records)
 
-    async def decide(self, reply_id: str, decision: str, sender_id: str) -> str:
+    async def decide(
+        self,
+        reply_id: str,
+        decision: str,
+        sender_id: str,
+        *,
+        allow: bool = False,
+    ) -> str:
         if decision not in {"同意", "拒绝"}:
             raise ValueError("无效的审批决定")
-        if str(sender_id) not in self.admin_ids:
+        if not allow and str(sender_id) not in self.admin_ids:
             raise PermissionError("你没有权限审批申请。")
         if not reply_id:
             raise LookupError("请回复相关的申请提醒消息以同意或拒绝请求。")
