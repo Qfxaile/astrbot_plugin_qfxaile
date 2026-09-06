@@ -189,6 +189,8 @@ class QfxailePlugin(Star):
         service = RequestApprovalService(
             self._client(event), self.store, self.settings, self._astrbot_admin_ids()
         )
+        if not service.can_decide_in_group(event.get_group_id()):
+            return
         try:
             result = await service.decide(
                 reply_id or "", decision, event.get_sender_id()
@@ -240,24 +242,29 @@ class QfxailePlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def handle_recall(self, event: AstrMessageEvent):
-        if not self.settings.value("recall.enabled", True):
-            return
         if event.message_str.strip() != "撤回":
-            return
-        if not self._is_admin(event):
-            yield event.plain_result("你没有权限执行撤回。")
             return
         reply_id = self._get_reply_id(event)
         if not reply_id:
-            yield event.plain_result("请回复需要撤回的消息。")
             return
+
+        if not self.settings.value("recall.enabled", True):
+            return
+
+        # “撤回”是完整指令，不应作为引用上下文进入默认 LLM 流程。
+        event.should_call_llm(True)
         try:
             await RecallService(self._client(event), self.settings).recall(
-                reply_id, str(getattr(event.message_obj, "message_id", "")) or None
+                reply_id,
+                str(getattr(event.message_obj, "message_id", "")) or None,
+                sender_id=event.get_sender_id(),
+                allow_any=self._is_admin(event),
             )
         except Exception as exc:
             logger.warning(f"撤回消息失败: {exc}")
             yield event.plain_result(f"撤回消息失败: {exc}")
+        finally:
+            event.stop_event()
 
     @filter.command("wordcloud", alias={"词云", "词云生成"})
     async def wordcloud_command(self, event: AstrMessageEvent):

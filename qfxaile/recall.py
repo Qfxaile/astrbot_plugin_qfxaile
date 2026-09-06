@@ -30,14 +30,34 @@ class RecallService:
         return None
 
     async def recall(
-        self, reply_id: str, command_message_id: str | None = None
+        self,
+        reply_id: str,
+        command_message_id: str | None = None,
+        *,
+        sender_id: str | None = None,
+        allow_any: bool = False,
     ) -> None:
+        if not allow_any:
+            original_sender_id = await self._message_sender(reply_id)
+            if not original_sender_id or str(sender_id or "") != original_sender_id:
+                raise PermissionError("只能撤回自己发送的消息。")
         await self.client.call("delete_msg", message_id=int(reply_id))
         if (
             self.settings.value("recall.delete_command_message", True)
             and command_message_id
         ):
             await self.client.call("delete_msg", message_id=int(command_message_id))
+
+    async def _message_sender(self, reply_id: str) -> str | None:
+        response = await self.client.call("get_msg", message_id=int(reply_id))
+        message = (
+            response.get("data", response) if isinstance(response, Mapping) else {}
+        )
+        sender = message.get("sender", message) if isinstance(message, Mapping) else {}
+        if not isinstance(sender, Mapping):
+            return None
+        value = sender.get("user_id")
+        return str(value) if value is not None else None
 
     @staticmethod
     def _message_list(raw: Any) -> list[Any]:

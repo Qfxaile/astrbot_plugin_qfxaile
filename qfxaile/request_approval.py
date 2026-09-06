@@ -88,6 +88,10 @@ class RequestApprovalService:
         self.store.save(records)
         return f"已{decision}请求 ID: {reply_id}"
 
+    def can_decide_in_group(self, group_id: Any) -> bool:
+        notify_group_id = str(self.settings.value("agree.notify_group_id", "")).strip()
+        return bool(notify_group_id) and str(group_id or "") == notify_group_id
+
     async def _approve(self, request_info: Mapping[str, Any], approve: bool) -> None:
         if request_info.get("type") == "friend":
             await self.client.call(

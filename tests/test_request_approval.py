@@ -47,3 +47,15 @@ async def test_request_service_notifies_and_decides():
     assert await service.decide("99", "同意", "7") == "已同意请求 ID: 99"
     assert client.calls[0][0] == "set_friend_add_request"
     assert store.data == {}
+
+
+def test_decisions_are_limited_to_notify_group():
+    service = RequestApprovalService(
+        Client(),
+        Store(),
+        PluginSettings({"agree": {"notify_group_id": "123"}}),
+    )
+
+    assert service.can_decide_in_group("123") is True
+    assert service.can_decide_in_group("456") is False
+    assert service.can_decide_in_group("") is False

@@ -33,6 +33,118 @@ def test_raw_message_parser_rejects_invalid_shapes():
     assert main.QfxailePlugin._raw_message(object()) == []
 
 
+class FakeRecallClient:
+    def __init__(self, original_sender_id):
+        self.original_sender_id = original_sender_id
+        self.calls = []
+
+    async def call(self, action, **params):
+        self.calls.append((action, params))
+        if action == "get_msg":
+            return {"data": {"sender": {"user_id": self.original_sender_id}}}
+        return {}
+
+
+class FakeSettings:
+    def __init__(self, values=None):
+        self.values = values or {}
+
+    def value(self, key, default):
+        return self.values.get(key, default)
+
+
+class FakeRecallEvent:
+    def __init__(self, sender_id, is_admin):
+        self.message_str = "撤回"
+        self.message_obj = type("Message", (), {"message_id": 43})()
+        self.sender_id = sender_id
+        self.is_admin = lambda: is_admin
+        self.results = []
+        self.llm_requested = None
+        self.stopped = False
+
+    def get_sender_id(self):
+        return self.sender_id
+
+    def plain_result(self, text):
+        return text
+
+    def should_call_llm(self, value):
+        self.llm_requested = value
+
+    def stop_event(self):
+        self.stopped = True
+
+
+@pytest.mark.asyncio
+async def test_recall_admin_intercepts_llm_and_deletes_any_message(monkeypatch):
+    client = FakeRecallClient("77")
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.settings = FakeSettings({"recall.enabled": True})
+    plugin._client = lambda event: client
+    monkeypatch.setattr(
+        main.QfxailePlugin,
+        "_get_reply_id",
+        lambda self, event: "42",
+    )
+    event = FakeRecallEvent("88", is_admin=True)
+
+    results = [result async for result in plugin.handle_recall(event)]
+
+    assert results == []
+    assert event.llm_requested is True
+    assert event.stopped is True
+    assert client.calls == [
+        ("delete_msg", {"message_id": 42}),
+        ("delete_msg", {"message_id": 43}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recall_non_admin_can_delete_own_message_and_intercepts_llm(monkeypatch):
+    client = FakeRecallClient("88")
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.settings = FakeSettings({"recall.enabled": True})
+    plugin._client = lambda event: client
+    monkeypatch.setattr(
+        main.QfxailePlugin,
+        "_get_reply_id",
+        lambda self, event: "42",
+    )
+    event = FakeRecallEvent("88", is_admin=False)
+
+    results = [result async for result in plugin.handle_recall(event)]
+
+    assert results == []
+    assert event.llm_requested is True
+    assert event.stopped is True
+    assert client.calls == [
+        ("get_msg", {"message_id": 42}),
+        ("delete_msg", {"message_id": 42}),
+        ("delete_msg", {"message_id": 43}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recall_non_admin_cannot_delete_other_message(monkeypatch):
+    client = FakeRecallClient("77")
+    plugin = main.QfxailePlugin.__new__(main.QfxailePlugin)
+    plugin.settings = FakeSettings({"recall.enabled": True})
+    plugin._client = lambda event: client
+    monkeypatch.setattr(
+        main.QfxailePlugin,
+        "_get_reply_id",
+        lambda self, event: "42",
+    )
+    event = FakeRecallEvent("88", is_admin=False)
+
+    results = [result async for result in plugin.handle_recall(event)]
+
+    assert results == ["撤回消息失败: 只能撤回自己发送的消息。"]
+    assert event.stopped is True
+    assert client.calls == [("get_msg", {"message_id": 42})]
+
+
 def test_plugin_constructor_does_not_create_background_tasks(monkeypatch):
     created = []
 
